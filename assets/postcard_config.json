@@ -1,0 +1,66 @@
+{
+    "style_presets": {
+        "3d_pixar": {
+            "name": "3D Pixar Style",
+            "prompt_suffix": "3D Pixar animation style, cute chibi character, vibrant colors, clean background, soft lighting, high quality render",
+            "description": "迪士尼皮克斯3D风格，可爱Q版角色"
+        },
+        "anime": {
+            "name": "Anime Style",
+            "prompt_suffix": "anime style, Japanese animation, bright colors, detailed eyes, clean line art, beautiful lighting",
+            "description": "日系动漫风格"
+        },
+        "watercolor": {
+            "name": "Watercolor Style",
+            "prompt_suffix": "watercolor illustration style, soft pastel colors, gentle brush strokes, artistic, dreamy atmosphere",
+            "description": "水彩插画风格"
+        },
+        "flat_design": {
+            "name": "Flat Design",
+            "prompt_suffix": "flat design illustration, minimalist, modern, clean lines, bold colors, vector art style",
+            "description": "扁平化设计插画风格"
+        },
+        "ghibli": {
+            "name": "Studio Ghibli Style",
+            "prompt_suffix": "Studio Ghibli anime style, soft watercolor background, warm lighting, whimsical, detailed scenery, Hayao Miyazaki inspired",
+            "description": "吉卜力工作室风格"
+        }
+    },
+    "default_style": "3d_pixar",
+    "postcard": {
+        "width": 1080,
+        "height": 1620,
+        "background_color_start": "#1a5276",
+        "background_color_end": "#2ecc71",
+        "card_color": "#ffffff",
+        "card_margin": 60,
+        "card_radius": 30,
+        "title_font_size": 56,
+        "body_font_size": 36,
+        "wish_font_size": 32,
+        "text_color": "#2c3e50",
+        "accent_color": "#e74c3c",
+        "font_path": "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+        "header_text": "华中师范大学",
+        "sub_header_text": "Central China Normal University",
+        "footer_text": "桂子山上，青春启航"
+    },
+    "major_keywords": {
+        "计算机科学": "holding a laptop, coding, digital elements, binary code floating around",
+        "计算机": "holding a laptop, coding, digital elements, binary code floating around",
+        "数学": "surrounded by mathematical formulas, geometric shapes, pi symbol",
+        "物理": "with atom models, physics equations, quantum symbols",
+        "化学": "with lab equipment, molecular structures, colorful solutions",
+        "生物": "surrounded by DNA helix, plants, microorganisms",
+        "文学": "holding books, floating pages, literary quotes",
+        "历史": "with ancient scrolls, historical artifacts, timeline",
+        "教育": "with teaching tools, books, inspiring light",
+        "心理": "with brain illustrations, thought bubbles, calming colors",
+        "经济": "with charts, graphs, financial symbols",
+        "法学": "with law books, scales of justice, gavel",
+        "外语": "with multilingual text, globe, communication symbols",
+        "音乐": "with musical notes, instruments, sound waves",
+        "美术": "with paint palette, brushes, colorful splashes",
+        "体育": "with sports equipment, dynamic pose, energetic"
+    }
+}
