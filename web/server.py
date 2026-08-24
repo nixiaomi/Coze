@@ -1,5 +1,6 @@
 """华师新生卡 Web 服务 - 前端页面 + API 代理"""
 import os
+import re
 import json
 import uuid
 import logging
@@ -10,7 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -28,6 +29,8 @@ def load_env_file():
                     if value and not value.startswith("<"):
                         os.environ.setdefault(key, value)
         logger.info("Loaded .env file")
+    else:
+        logger.warning(f".env file not found at: {env_path}")
 
 
 load_env_file()
@@ -59,23 +62,24 @@ async def index():
 
 @app.post("/api/generate")
 async def generate_postcard(req: GenerateRequest):
-    """
-    代理调用 Agent API，生成明信片。
-    前端发送用户信息，后端组装请求调用 Agent 的 stream_run 接口，
-    解析流式响应提取图片 URL 返回给前端。
-    """
-    # Agent API 配置
+    """代理调用 Agent API，生成明信片。"""
     agent_api_url = os.getenv("AGENT_API_URL", "https://rgmx4tkpcs.coze.site/stream_run")
     agent_token = os.getenv("AGENT_API_TOKEN", "")
     project_id = int(os.getenv("AGENT_PROJECT_ID", "7677355551965216803"))
 
+    logger.info(f"Token configured: {'Yes' if agent_token else 'No'} (length: {len(agent_token)})")
+    logger.info(f"Agent API URL: {agent_api_url}")
+    logger.info(f"Project ID: {project_id}")
+
     if not agent_token:
-        logger.error("AGENT_API_TOKEN not configured")
-        raise HTTPException(status_code=500, detail="服务端未配置 API Token，请联系管理员")
+        logger.error("AGENT_API_TOKEN not configured!")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": "服务端未配置 API Token，请检查 web/.env 文件"}
+        )
 
     session_id = req.session_id or str(uuid.uuid4())
 
-    # 构造 Agent API 请求体
     payload = {
         "content": {
             "query": {
@@ -99,10 +103,10 @@ async def generate_postcard(req: GenerateRequest):
         "Content-Type": "application/json"
     }
 
-    logger.info(f"Calling Agent API, session: {session_id}, query: {req.query[:50]}...")
+    logger.info(f"Calling Agent API, session: {session_id}")
+    logger.info(f"Query: {req.query[:80]}...")
 
     try:
-        # 调用 Agent API（流式响应）
         response = requests.post(
             agent_api_url,
             headers=headers,
@@ -110,113 +114,176 @@ async def generate_postcard(req: GenerateRequest):
             stream=True,
             timeout=300
         )
-        response.raise_for_status()
 
-        # 解析流式响应，提取图片 URL
-        character_image_url = ""
-        postcard_url = ""
+        logger.info(f"Agent API response status: {response.status_code}")
+
+        if response.status_code != 200:
+            error_body = response.text[:500]
+            logger.error(f"Agent API returned {response.status_code}: {error_body}")
+            return JSONResponse(
+                status_code=502,
+                content={"success": False, "error": f"Agent API 返回 {response.status_code}: {error_body[:200]}"}
+            )
+
+        # 解析流式响应
         full_content = ""
+        raw_lines = []
 
         for line in response.iter_lines(decode_unicode=True):
             if not line:
                 continue
 
-            # 处理 SSE 格式数据
             line_str = line.strip()
+            raw_lines.append(line_str)
+
+            # SSE 格式: data: {...}
             if line_str.startswith("data:"):
                 data_str = line_str[5:].strip()
                 if data_str == "[DONE]":
                     break
                 try:
                     data = json.loads(data_str)
-                    # 提取文本内容
-                    if isinstance(data, dict):
-                        content = data.get("content", "")
-                        if content:
-                            full_content += content
+                    _extract_content_from_data(data, full_content)
+                    full_content += _get_text_from_data(data)
                 except json.JSONDecodeError:
-                    # 可能是纯文本片段
-                    full_content += line_str
+                    full_content += data_str
             else:
-                # 非 SSE 格式，尝试直接解析
+                # 尝试直接解析 JSON
                 try:
                     data = json.loads(line_str)
-                    if isinstance(data, dict):
-                        content = data.get("content", "")
-                        if content:
-                            full_content += content
+                    full_content += _get_text_from_data(data)
                 except json.JSONDecodeError:
-                    full_content += line_str
+                    # 纯文本行
+                    if not line_str.startswith("event:") and not line_str.startswith("id:"):
+                        full_content += line_str
 
-        logger.info(f"Agent response length: {len(full_content)} chars")
+        logger.info(f"Parsed content length: {len(full_content)} chars")
 
-        # 从响应中提取图片 URL
-        character_image_url, postcard_url = _extract_image_urls(full_content)
+        # 如果内容为空，打印原始响应前几行用于调试
+        if not full_content.strip():
+            logger.warning("No content parsed. Raw lines sample:")
+            for rl in raw_lines[:10]:
+                logger.warning(f"  RAW: {rl[:200]}")
 
-        if character_image_url and postcard_url:
+        # 提取图片 URL
+        character_url, postcard_url = _extract_image_urls(full_content)
+
+        if character_url and postcard_url:
             return JSONResponse(content={
                 "success": True,
-                "character_image_url": character_image_url,
+                "character_image_url": character_url,
                 "postcard_url": postcard_url,
                 "message": "明信片生成成功！"
             })
-        elif character_image_url:
-            # 只生成了角色图片，没合成明信片
+        elif character_url:
             return JSONResponse(content={
                 "success": True,
-                "character_image_url": character_image_url,
-                "postcard_url": character_image_url,
-                "message": "卡通形象已生成，明信片合成中..."
+                "character_image_url": character_url,
+                "postcard_url": character_url,
+                "message": "卡通形象已生成"
             })
         else:
-            logger.warning(f"No image URLs found in response. Content preview: {full_content[:200]}")
+            # 尝试从原始行中提取（兜底）
+            raw_text = "\n".join(raw_lines)
+            character_url, postcard_url = _extract_image_urls(raw_text)
+            if character_url and postcard_url:
+                return JSONResponse(content={
+                    "success": True,
+                    "character_image_url": character_url,
+                    "postcard_url": postcard_url,
+                    "message": "明信片生成成功！"
+                })
+
+            logger.warning(f"No image URLs found. Content preview: {full_content[:300]}")
             return JSONResponse(content={
                 "success": False,
-                "error": "未能从Agent响应中提取到图片，请重试"
+                "error": "未能从Agent响应中提取到图片URL，请查看服务端日志排查"
             })
 
     except requests.exceptions.Timeout:
         logger.error("Agent API timeout")
-        raise HTTPException(status_code=504, detail="Agent 响应超时，请稍后重试")
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Agent API error: {e}")
-        raise HTTPException(status_code=502, detail=f"调用 Agent 失败: {str(e)}")
+        return JSONResponse(status_code=504, content={"success": False, "error": "Agent 响应超时(>5分钟)，请稍后重试"})
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"Connection error: {e}")
+        return JSONResponse(status_code=502, content={"success": False, "error": f"无法连接 Agent 服务: {str(e)[:100]}"})
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        raise HTTPException(status_code=500, detail=f"服务内部错误: {str(e)}")
+        logger.error(f"Unexpected error: {type(e).__name__}: {e}", exc_info=True)
+        return JSONResponse(status_code=500, content={"success": False, "error": f"服务内部错误: {str(e)}"})
+
+
+def _get_text_from_data(data: dict) -> str:
+    """从不同格式的响应数据中提取文本内容"""
+    if not isinstance(data, dict):
+        return ""
+
+    text = ""
+
+    # 格式1: {"content": "text"}
+    if "content" in data and isinstance(data["content"], str):
+        text += data["content"]
+
+    # 格式2: {"choices": [{"delta": {"content": "text"}}]}
+    choices = data.get("choices", [])
+    if choices and isinstance(choices, list):
+        for choice in choices:
+            if isinstance(choice, dict):
+                delta = choice.get("delta", {})
+                if isinstance(delta, dict):
+                    text += delta.get("content", "")
+                msg = choice.get("message", {})
+                if isinstance(msg, dict):
+                    text += msg.get("content", "")
+
+    # 格式3: {"data": {"content": "text"}}
+    inner_data = data.get("data", {})
+    if isinstance(inner_data, dict):
+        text += inner_data.get("content", "")
+        # 格式4: {"data": {"messages": [{"content": "text"}]}}
+        messages = inner_data.get("messages", [])
+        if messages and isinstance(messages, list):
+            for msg in messages:
+                if isinstance(msg, dict):
+                    text += msg.get("content", "")
+
+    # 格式5: {"text": "text"}
+    text += data.get("text", "")
+
+    # 格式6: {"output": "text"}
+    text += data.get("output", "")
+
+    return text
+
+
+def _extract_content_from_data(data, content):
+    """Debug helper - not used directly"""
+    pass
 
 
 def _extract_image_urls(content: str) -> tuple:
-    """
-    从 Agent 响应文本中提取图片 URL。
-    Agent 会返回两张图片：角色形象 + 明信片。
-    按出现顺序，第一张是角色形象，第二张是明信片。
-    """
-    import re
-
-    # 匹配所有 URL（包括带签名参数的）
-    url_pattern = r'https?://[^\s\)\"\'>\]]+\.(?:png|jpg|jpeg|webp)(?:\?[^\s\)\"\'>\]]+)?'
-    urls = re.findall(url_pattern, content)
+    """从响应文本中提取图片 URL"""
+    # 匹配所有图片 URL（包括带签名参数的长 URL）
+    url_pattern = r'https?://[^\s\)\"\'>\]\}\\]+(?:\.(?:png|jpg|jpeg|webp|gif))(?:\?[^\s\)\"\'>\]\}\\]+)?'
+    urls = re.findall(url_pattern, content, re.IGNORECASE)
 
     # 去重保持顺序
     seen = set()
     unique_urls = []
     for url in urls:
-        # 去除末尾的标点
         url = url.rstrip('.,;:!?)')
         if url not in seen:
             seen.add(url)
             unique_urls.append(url)
 
-    logger.info(f"Extracted {len(unique_urls)} unique image URLs")
+    logger.info(f"Extracted {len(unique_urls)} unique image URLs from content")
+    for i, u in enumerate(unique_urls):
+        logger.info(f"  URL[{i}]: {u[:80]}...")
 
     character_url = ""
     postcard_url = ""
 
     if len(unique_urls) >= 2:
-        # 第一张是角色形象，第二张（通常是最后一张）是明信片
         character_url = unique_urls[0]
-        postcard_url = unique_urls[-1]  # 最后一张通常是明信片
+        postcard_url = unique_urls[-1]
     elif len(unique_urls) == 1:
         character_url = unique_urls[0]
 
@@ -227,4 +294,6 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("WEB_PORT", "8080"))
     logger.info(f"Starting web server on port {port}")
+    logger.info(f"Agent API: {os.getenv('AGENT_API_URL', 'not set')}")
+    logger.info(f"Token set: {'Yes' if os.getenv('AGENT_API_TOKEN') else 'No'}")
     uvicorn.run(app, host="0.0.0.0", port=port)
