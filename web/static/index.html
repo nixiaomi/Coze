@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>华师新生卡 - CCNU 开学纪念明信片</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #1a5276 0%, #2ecc71 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 480px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 30px 0 20px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        /* Card */
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 28px 24px;
+            margin-bottom: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-title .icon {
+            font-size: 22px;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #555;
+            margin-bottom: 6px;
+        }
+
+        .form-group label .required {
+            color: #e74c3c;
+            margin-left: 2px;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e8e8e8;
+            border-radius: 12px;
+            font-size: 15px;
+            transition: all 0.3s;
+            outline: none;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            border-color: #2ecc71;
+            box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.1);
+        }
+
+        .form-group textarea {
+            resize: none;
+            height: 70px;
+        }
+
+        .form-group input::placeholder,
+        .form-group textarea::placeholder {
+            color: #bbb;
+        }
+
+        /* Style Selector */
+        .style-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .style-item {
+            position: relative;
+            border: 2px solid #e8e8e8;
+            border-radius: 12px;
+            padding: 12px 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #fafafa;
+        }
+
+        .style-item:hover {
+            border-color: #2ecc71;
+            transform: translateY(-2px);
+        }
+
+        .style-item.active {
+            border-color: #2ecc71;
+            background: linear-gradient(135deg, #e8f8f0, #d5f5e3);
+            box-shadow: 0 4px 12px rgba(46, 204, 113, 0.2);
+        }
+
+        .style-item .emoji {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+
+        .style-item .name {
+            font-size: 11px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        .style-item.active .name {
+            color: #27ae60;
+            font-weight: 600;
+        }
+
+        /* Button */
+        .btn-generate {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            font-size: 17px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 6px 20px rgba(46, 204, 113, 0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-generate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(46, 204, 113, 0.45);
+        }
+
+        .btn-generate:active {
+            transform: translateY(0);
+        }
+
+        .btn-generate:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-generate .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: none;
+        }
+
+        .btn-generate.loading .spinner {
+            display: block;
+        }
+
+        .btn-generate.loading .btn-text {
+            display: none;
+        }
+
+        .btn-generate .loading-text {
+            display: none;
+        }
+
+        .btn-generate.loading .loading-text {
+            display: inline;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Result */
+        .result-section {
+            display: none;
+        }
+
+        .result-section.show {
+            display: block;
+            animation: fadeInUp 0.5s ease;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .result-images {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .result-item {
+            text-align: center;
+        }
+
+        .result-item .label {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        .result-item img {
+            width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .btn-download {
+            display: inline-block;
+            margin-top: 12px;
+            padding: 10px 24px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+
+        .btn-download:hover {
+            background: #2980b9;
+            transform: translateY(-1px);
+        }
+
+        .btn-reset {
+            width: 100%;
+            padding: 14px;
+            background: transparent;
+            color: #888;
+            border: 2px solid #e8e8e8;
+            border-radius: 12px;
+            font-size: 15px;
+            cursor: pointer;
+            margin-top: 16px;
+            transition: all 0.3s;
+        }
+
+        .btn-reset:hover {
+            border-color: #2ecc71;
+            color: #2ecc71;
+        }
+
+        /* Error */
+        .error-msg {
+            display: none;
+            background: #ffeaea;
+            border: 1px solid #ffcdd2;
+            border-radius: 10px;
+            padding: 12px 16px;
+            color: #c62828;
+            font-size: 14px;
+            margin-top: 12px;
+        }
+
+        .error-msg.show {
+            display: block;
+            animation: shake 0.4s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 20px 0;
+            color: rgba(255,255,255,0.7);
+            font-size: 12px;
+        }
+
+        /* Progress Steps */
+        .progress-steps {
+            display: none;
+            margin-top: 16px;
+        }
+
+        .progress-steps.show {
+            display: block;
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            font-size: 14px;
+            color: #999;
+        }
+
+        .step.active {
+            color: #2ecc71;
+        }
+
+        .step.done {
+            color: #27ae60;
+        }
+
+        .step .step-icon {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 2px solid currentColor;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+
+        .step.active .step-icon {
+            animation: pulse 1.5s infinite;
+        }
+
+        .step.done .step-icon {
+            background: #27ae60;
+            border-color: #27ae60;
+            color: white;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🎓 华师新生卡</h1>
+            <p>生成你的专属开学纪念明信片</p>
+        </div>
+
+        <!-- Form Card -->
+        <div class="card" id="formCard">
+            <div class="card-title">
+                <span class="icon">✏️</span>
+                填写你的信息
+            </div>
+
+            <div class="form-group">
+                <label>姓名 / 昵称 <span class="required">*</span></label>
+                <input type="text" id="name" placeholder="你的名字或昵称" maxlength="20">
+            </div>
+
+            <div class="form-group">
+                <label>就读专业 <span class="required">*</span></label>
+                <input type="text" id="major" placeholder="如：计算机科学与技术" maxlength="30">
+            </div>
+
+            <div class="form-group">
+                <label>性格关键词 / 爱好</label>
+                <input type="text" id="personality" placeholder="如：活泼开朗、喜欢摄影和读书">
+            </div>
+
+            <div class="form-group">
+                <label>开学愿望 ✨</label>
+                <textarea id="wish" placeholder="写下一句你的开学愿望吧~"></textarea>
+            </div>
+        </div>
+
+        <!-- Style Card -->
+        <div class="card">
+            <div class="card-title">
+                <span class="icon">🎨</span>
+                选择画风
+            </div>
+            <div class="style-grid">
+                <div class="style-item active" data-style="3d_pixar">
+                    <div class="emoji">🧸</div>
+                    <div class="name">3D皮克斯</div>
+                </div>
+                <div class="style-item" data-style="anime">
+                    <div class="emoji">🌸</div>
+                    <div class="name">日系动漫</div>
+                </div>
+                <div class="style-item" data-style="watercolor">
+                    <div class="emoji">🎨</div>
+                    <div class="name">水彩插画</div>
+                </div>
+                <div class="style-item" data-style="flat_design">
+                    <div class="emoji">📐</div>
+                    <div class="name">扁平插画</div>
+                </div>
+                <div class="style-item" data-style="ghibli">
+                    <div class="emoji">🏔️</div>
+                    <div class="name">吉卜力</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Generate Button -->
+        <button class="btn-generate" id="btnGenerate" onclick="generate()">
+            <div class="spinner"></div>
+            <span class="btn-text">✨ 生成我的明信片</span>
+            <span class="loading-text">正在生成中，请稍候...</span>
+        </button>
+
+        <!-- Progress -->
+        <div class="card progress-steps" id="progressSteps">
+            <div class="step" id="step1">
+                <div class="step-icon">1</div>
+                <span>正在生成你的卡通形象...</span>
+            </div>
+            <div class="step" id="step2">
+                <div class="step-icon">2</div>
+                <span>正在合成华师明信片...</span>
+            </div>
+            <div class="step" id="step3">
+                <div class="step-icon">3</div>
+                <span>完成！即将展示结果</span>
+            </div>
+        </div>
+
+        <!-- Error -->
+        <div class="error-msg" id="errorMsg"></div>
+
+        <!-- Result -->
+        <div class="result-section" id="resultSection">
+            <div class="card">
+                <div class="card-title">
+                    <span class="icon">🎉</span>
+                    你的专属明信片
+                </div>
+                <div class="result-images">
+                    <div class="result-item">
+                        <div class="label">🧑‍🎓 你的卡通形象</div>
+                        <img id="characterImg" src="" alt="卡通形象">
+                    </div>
+                    <div class="result-item">
+                        <div class="label">📮 华师开学明信片</div>
+                        <img id="postcardImg" src="" alt="明信片">
+                        <a class="btn-download" id="btnDownload" href="" download>📥 下载明信片</a>
+                    </div>
+                </div>
+                <button class="btn-reset" onclick="resetForm()">🔄 再生成一张</button>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>华中师范大学 · 桂子山上，青春启航</p>
+        </div>
+    </div>
+
+    <script>
+        // API Configuration
+        const API_URL = '/api/generate';
+
+        // Style selector
+        let selectedStyle = '3d_pixar';
+        document.querySelectorAll('.style-item').forEach(item => {
+            item.addEventListener('click', function() {
+                document.querySelectorAll('.style-item').forEach(i => i.classList.remove('active'));
+                this.classList.add('active');
+                selectedStyle = this.dataset.style;
+            });
+        });
+
+        // Generate
+        async function generate() {
+            const name = document.getElementById('name').value.trim();
+            const major = document.getElementById('major').value.trim();
+            const personality = document.getElementById('personality').value.trim();
+            const wish = document.getElementById('wish').value.trim();
+
+            // Validation
+            if (!name) {
+                showError('请填写你的姓名或昵称');
+                return;
+            }
+            if (!major) {
+                showError('请填写你的就读专业');
+                return;
+            }
+
+            // Build query
+            let query = `我叫${name}，${major}专业`;
+            if (personality) query += `，${personality}`;
+            if (wish) query += `，${wish}`;
+            query += `。请帮我生成一张开学纪念明信片，用${getStyleName(selectedStyle)}风格。`;
+
+            // UI state
+            setLoading(true);
+            hideError();
+            document.getElementById('resultSection').classList.remove('show');
+            showProgress();
+            setStep(1);
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: query,
+                        style: selectedStyle,
+                        name: name,
+                        major: major,
+                        personality: personality,
+                        wish: wish,
+                        session_id: 'web_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    setStep(2);
+                    await sleep(500);
+                    setStep(3);
+                    await sleep(300);
+
+                    // Show results
+                    document.getElementById('characterImg').src = data.character_image_url;
+                    document.getElementById('postcardImg').src = data.postcard_url;
+                    document.getElementById('btnDownload').href = data.postcard_url;
+
+                    hideProgress();
+                    document.getElementById('resultSection').classList.add('show');
+
+                    // Scroll to result
+                    setTimeout(() => {
+                        document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 200);
+                } else {
+                    throw new Error(data.error || '生成失败，请重试');
+                }
+            } catch (error) {
+                console.error('Generation error:', error);
+                showError('生成失败：' + error.message + '。请稍后重试~');
+                hideProgress();
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        // Reset
+        function resetForm() {
+            document.getElementById('resultSection').classList.remove('show');
+            document.getElementById('formCard').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Helpers
+        function getStyleName(style) {
+            const map = {
+                '3d_pixar': '3D皮克斯',
+                'anime': '日系动漫',
+                'watercolor': '水彩插画',
+                'flat_design': '扁平插画',
+                'ghibli': '吉卜力'
+            };
+            return map[style] || '3D皮克斯';
+        }
+
+        function setLoading(loading) {
+            const btn = document.getElementById('btnGenerate');
+            btn.disabled = loading;
+            if (loading) {
+                btn.classList.add('loading');
+            } else {
+                btn.classList.remove('loading');
+            }
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('errorMsg');
+            el.textContent = msg;
+            el.classList.add('show');
+        }
+
+        function hideError() {
+            document.getElementById('errorMsg').classList.remove('show');
+        }
+
+        function showProgress() {
+            document.getElementById('progressSteps').classList.add('show');
+            document.querySelectorAll('.step').forEach(s => {
+                s.classList.remove('active', 'done');
+            });
+        }
+
+        function hideProgress() {
+            document.getElementById('progressSteps').classList.remove('show');
+        }
+
+        function setStep(n) {
+            for (let i = 1; i <= 3; i++) {
+                const el = document.getElementById('step' + i);
+                if (i < n) {
+                    el.classList.remove('active');
+                    el.classList.add('done');
+                    el.querySelector('.step-icon').textContent = '✓';
+                } else if (i === n) {
+                    el.classList.add('active');
+                    el.classList.remove('done');
+                    el.querySelector('.step-icon').textContent = i;
+                } else {
+                    el.classList.remove('active', 'done');
+                    el.querySelector('.step-icon').textContent = i;
+                }
+            }
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+    </script>
+</body>
+</html>
