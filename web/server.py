@@ -143,16 +143,21 @@ async def generate_postcard(req: GenerateRequest):
                     break
                 try:
                     data = json.loads(data_str)
-                    _extract_content_from_data(data, full_content)
-                    full_content += _get_text_from_data(data)
-                except json.JSONDecodeError:
-                    full_content += data_str
+                    extracted = _get_text_from_data(data)
+                    if isinstance(extracted, str):
+                        full_content += extracted
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.debug(f"SSE parse warning: {e}")
+                    if isinstance(data_str, str):
+                        full_content += data_str
             else:
                 # 尝试直接解析 JSON
                 try:
                     data = json.loads(line_str)
-                    full_content += _get_text_from_data(data)
-                except json.JSONDecodeError:
+                    extracted = _get_text_from_data(data)
+                    if isinstance(extracted, str):
+                        full_content += extracted
+                except (json.JSONDecodeError, TypeError):
                     # 纯文本行
                     if not line_str.startswith("event:") and not line_str.startswith("id:"):
                         full_content += line_str
@@ -164,6 +169,8 @@ async def generate_postcard(req: GenerateRequest):
             logger.warning("No content parsed. Raw lines sample:")
             for rl in raw_lines[:10]:
                 logger.warning(f"  RAW: {rl[:200]}")
+        else:
+            logger.info(f"Content preview: {full_content[:200]}")
 
         # 提取图片 URL
         character_url, postcard_url = _extract_image_urls(full_content)
@@ -218,9 +225,17 @@ def _get_text_from_data(data: dict) -> str:
 
     text = ""
 
+    def _safe_str(val) -> str:
+        """安全地转为字符串，跳过 dict/list"""
+        if isinstance(val, str):
+            return val
+        if isinstance(val, (int, float, bool)):
+            return str(val)
+        return ""
+
     # 格式1: {"content": "text"}
-    if "content" in data and isinstance(data["content"], str):
-        text += data["content"]
+    if "content" in data:
+        text += _safe_str(data["content"])
 
     # 格式2: {"choices": [{"delta": {"content": "text"}}]}
     choices = data.get("choices", [])
@@ -229,27 +244,27 @@ def _get_text_from_data(data: dict) -> str:
             if isinstance(choice, dict):
                 delta = choice.get("delta", {})
                 if isinstance(delta, dict):
-                    text += delta.get("content", "")
+                    text += _safe_str(delta.get("content", ""))
                 msg = choice.get("message", {})
                 if isinstance(msg, dict):
-                    text += msg.get("content", "")
+                    text += _safe_str(msg.get("content", ""))
 
     # 格式3: {"data": {"content": "text"}}
     inner_data = data.get("data", {})
     if isinstance(inner_data, dict):
-        text += inner_data.get("content", "")
+        text += _safe_str(inner_data.get("content", ""))
         # 格式4: {"data": {"messages": [{"content": "text"}]}}
         messages = inner_data.get("messages", [])
         if messages and isinstance(messages, list):
             for msg in messages:
                 if isinstance(msg, dict):
-                    text += msg.get("content", "")
+                    text += _safe_str(msg.get("content", ""))
 
     # 格式5: {"text": "text"}
-    text += data.get("text", "")
+    text += _safe_str(data.get("text", ""))
 
     # 格式6: {"output": "text"}
-    text += data.get("output", "")
+    text += _safe_str(data.get("output", ""))
 
     return text
 
