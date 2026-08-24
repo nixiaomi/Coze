@@ -1,17 +1,17 @@
-"""华师新生卡 Web 服务 - 前端页面 + API 代理"""
+"""SCNU 新生卡 Web 服务 - 前端页面 + API 代理"""
 import os
 import re
 import json
 import uuid
 import logging
 import requests
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, UploadFile, File, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional
 
-VERSION = "3.0.0"
+VERSION = "4.0.0"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -37,20 +37,28 @@ def load_env_file():
 
 load_env_file()
 
-app = FastAPI(title="华师新生卡 Web 服务")
+app = FastAPI(title="SCNU 新生卡 Web 服务")
 
-# 挂载静态文件
-static_dir = os.path.join(os.path.dirname(__file__), "static")
+# 目录
+base_dir = os.path.dirname(__file__)
+static_dir = os.path.join(base_dir, "static")
+uploads_dir = os.path.join(base_dir, "uploads")
+os.makedirs(uploads_dir, exist_ok=True)
+
+# 挂载静态文件与上传目录
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 
 class GenerateRequest(BaseModel):
     query: str
     style: Optional[str] = "3d_pixar"
+    gender: Optional[str] = ""
     name: Optional[str] = ""
     major: Optional[str] = ""
     personality: Optional[str] = ""
     wish: Optional[str] = ""
+    photo_url: Optional[str] = ""
     session_id: Optional[str] = ""
 
 
@@ -62,16 +70,43 @@ async def index():
         return HTMLResponse(content=f.read())
 
 
+@app.post("/api/upload")
+async def upload_photo(request: Request, file: UploadFile = File(...)):
+    """接收自拍照片上传，保存到本地并返回可访问 URL。"""
+    try:
+        content = await file.read()
+        if len(content) > 10 * 1024 * 1024:
+            return JSONResponse(status_code=400, content={"success": False, "error": "图片不能超过 10MB"})
+
+        ext = os.path.splitext(file.filename or "")[1].lower()
+        if ext not in (".png", ".jpg", ".jpeg", ".webp", ".gif"):
+            ext = ".jpg"
+        filename = f"{uuid.uuid4().hex}{ext}"
+        save_path = os.path.join(uploads_dir, filename)
+        with open(save_path, "wb") as f:
+            f.write(content)
+
+        # 基于请求 host 拼装完整 URL
+        base = str(request.base_url).rstrip("/")
+        url = f"{base}/uploads/{filename}"
+        logger.info(f"Photo uploaded: {filename} -> {url}")
+        return JSONResponse(content={"success": True, "url": url})
+    except Exception as e:
+        logger.error(f"Upload error: {e}", exc_info=True)
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+
 @app.post("/api/generate")
 async def generate_postcard(req: GenerateRequest):
-    """代理调用 Agent API，生成明信片。"""
+    """代理调用 Agent API，生成学生卡。"""
     agent_api_url = os.getenv("AGENT_API_URL", "https://rgmx4tkpcs.coze.site/stream_run")
     agent_token = os.getenv("AGENT_API_TOKEN", "")
     project_id = int(os.getenv("AGENT_PROJECT_ID", "7677355551965216803"))
 
     logger.info(f"Token configured: {'Yes' if agent_token else 'No'} (length: {len(agent_token)})")
     logger.info(f"Agent API URL: {agent_api_url}")
-    logger.info(f"Project ID: {project_id}")
+    logger.info(f"Photo uploaded: {'Yes' if req.photo_url else 'No'}")
+    logger.info(f"Gender: '{req.gender}'")
 
     if not agent_token:
         logger.error("AGENT_API_TOKEN not configured!")
@@ -82,17 +117,29 @@ async def generate_postcard(req: GenerateRequest):
 
     session_id = req.session_id or str(uuid.uuid4())
 
+    # 组装 prompt 数组（先文本，后图片）
+    prompt_list = [
+        {
+            "type": "text",
+            "content": {
+                "text": req.query
+            }
+        }
+    ]
+    if req.photo_url:
+        prompt_list.append(
+            {
+                "type": "image",
+                "content": {
+                    "image_url": req.photo_url
+                }
+            }
+        )
+
     payload = {
         "content": {
             "query": {
-                "prompt": [
-                    {
-                        "type": "text",
-                        "content": {
-                            "text": req.query
-                        }
-                    }
-                ]
+                "prompt": prompt_list
             }
         },
         "type": "query",
@@ -182,7 +229,7 @@ async def generate_postcard(req: GenerateRequest):
                 "success": True,
                 "character_image_url": character_url,
                 "postcard_url": postcard_url,
-                "message": "明信片生成成功！"
+                "message": "学生卡生成成功！"
             })
         elif character_url:
             return JSONResponse(content={
@@ -200,7 +247,7 @@ async def generate_postcard(req: GenerateRequest):
                     "success": True,
                     "character_image_url": character_url,
                     "postcard_url": postcard_url,
-                    "message": "明信片生成成功！"
+                    "message": "学生卡生成成功！"
                 })
 
             logger.warning(f"No image URLs found. Content preview: {full_content[:300]}")
@@ -271,11 +318,6 @@ def _get_text_from_data(data: dict) -> str:
     return text
 
 
-def _extract_content_from_data(data, content):
-    """Debug helper - not used directly"""
-    pass
-
-
 def _extract_image_urls(content: str) -> tuple:
     """从响应文本中提取图片 URL"""
     # 匹配所有图片 URL（包括带签名参数的长 URL）
@@ -310,10 +352,11 @@ def _extract_image_urls(content: str) -> tuple:
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("WEB_PORT", "8080"))
-    logger.info(f"================ 华师新生卡 Web 服务启动 ================")
+    logger.info(f"================ SCNU 新生卡 Web 服务启动 ================")
     logger.info(f"版本: {VERSION}")
     logger.info(f"端口: {port}")
     logger.info(f"Agent API: {os.getenv('AGENT_API_URL', 'not set')}")
+    logger.info(f"上传目录: {uploads_dir}")
     token = os.getenv('AGENT_API_TOKEN', '')
     logger.info(f"Token 配置: {'Yes (长度 %d)' % len(token) if token else 'No!!!'}")
     logger.info(f"========================================================")

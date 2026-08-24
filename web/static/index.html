@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>华师新生卡 - CCNU 开学纪念明信片</title>
+    <title>SCNU 新生卡 - 华南师范大学</title>
     <style>
         * {
             margin: 0;
@@ -13,7 +13,7 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-            background: linear-gradient(135deg, #1a5276 0%, #2ecc71 100%);
+            background: linear-gradient(135deg, #0b2447 0%, #19376d 50%, #1a5fb4 100%);
             min-height: 100vh;
             padding: 20px;
         }
@@ -34,12 +34,19 @@
             font-size: 28px;
             font-weight: 700;
             margin-bottom: 8px;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header .school-en {
+            font-size: 13px;
+            opacity: 0.85;
+            letter-spacing: 1px;
         }
 
         .header p {
             font-size: 14px;
             opacity: 0.9;
+            margin-top: 4px;
         }
 
         /* Card */
@@ -48,13 +55,13 @@
             border-radius: 20px;
             padding: 28px 24px;
             margin-bottom: 16px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
         }
 
         .card-title {
             font-size: 18px;
             font-weight: 600;
-            color: #2c3e50;
+            color: #0b2447;
             margin-bottom: 20px;
             display: flex;
             align-items: center;
@@ -97,8 +104,8 @@
 
         .form-group input:focus,
         .form-group textarea:focus {
-            border-color: #2ecc71;
-            box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.1);
+            border-color: #2e86de;
+            box-shadow: 0 0 0 3px rgba(46, 134, 222, 0.1);
         }
 
         .form-group textarea {
@@ -109,6 +116,97 @@
         .form-group input::placeholder,
         .form-group textarea::placeholder {
             color: #bbb;
+        }
+
+        /* Gender Selector */
+        .gender-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .gender-item {
+            border: 2px solid #e8e8e8;
+            border-radius: 12px;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #fafafa;
+            font-size: 15px;
+            color: #555;
+        }
+
+        .gender-item:hover {
+            border-color: #2e86de;
+        }
+
+        .gender-item.active {
+            border-color: #2e86de;
+            background: linear-gradient(135deg, #eaf2fc, #d6e9f8);
+            color: #1a5fb4;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(46, 134, 222, 0.2);
+        }
+
+        /* Photo Upload */
+        .upload-box {
+            border: 2px dashed #d0d0d0;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            background: #fafafa;
+        }
+
+        .upload-box:hover {
+            border-color: #2e86de;
+            background: #f0f7ff;
+        }
+
+        .upload-box .upload-hint {
+            color: #999;
+            font-size: 13px;
+        }
+
+        .upload-box .upload-hint .icon {
+            font-size: 28px;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .upload-box img.preview {
+            max-width: 100%;
+            max-height: 160px;
+            border-radius: 8px;
+            margin-top: 8px;
+        }
+
+        .upload-box.has-image {
+            border-style: solid;
+            border-color: #2e86de;
+        }
+
+        .upload-box .remove-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 24px;
+            display: none;
+        }
+
+        .upload-box.has-image .remove-btn {
+            display: block;
         }
 
         /* Style Selector */
@@ -131,14 +229,14 @@
         }
 
         .style-item:hover {
-            border-color: #2ecc71;
+            border-color: #2e86de;
             transform: translateY(-2px);
         }
 
         .style-item.active {
-            border-color: #2ecc71;
-            background: linear-gradient(135deg, #e8f8f0, #d5f5e3);
-            box-shadow: 0 4px 12px rgba(46, 204, 113, 0.2);
+            border-color: #2e86de;
+            background: linear-gradient(135deg, #eaf2fc, #d6e9f8);
+            box-shadow: 0 4px 12px rgba(46, 134, 222, 0.2);
         }
 
         .style-item .emoji {
@@ -153,7 +251,7 @@
         }
 
         .style-item.active .name {
-            color: #27ae60;
+            color: #1a5fb4;
             font-weight: 600;
         }
 
@@ -161,7 +259,7 @@
         .btn-generate {
             width: 100%;
             padding: 16px;
-            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            background: linear-gradient(135deg, #2e86de, #1a5fb4);
             color: white;
             border: none;
             border-radius: 14px;
@@ -169,7 +267,7 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
-            box-shadow: 0 6px 20px rgba(46, 204, 113, 0.35);
+            box-shadow: 0 6px 20px rgba(26, 95, 180, 0.35);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -178,7 +276,7 @@
 
         .btn-generate:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(46, 204, 113, 0.45);
+            box-shadow: 0 8px 25px rgba(26, 95, 180, 0.45);
         }
 
         .btn-generate:active {
@@ -268,7 +366,7 @@
             display: inline-block;
             margin-top: 12px;
             padding: 10px 24px;
-            background: #3498db;
+            background: #1a5fb4;
             color: white;
             border: none;
             border-radius: 10px;
@@ -280,7 +378,7 @@
         }
 
         .btn-download:hover {
-            background: #2980b9;
+            background: #0b2447;
             transform: translateY(-1px);
         }
 
@@ -298,8 +396,8 @@
         }
 
         .btn-reset:hover {
-            border-color: #2ecc71;
-            color: #2ecc71;
+            border-color: #2e86de;
+            color: #2e86de;
         }
 
         /* Error */
@@ -353,11 +451,11 @@
         }
 
         .step.active {
-            color: #2ecc71;
+            color: #2e86de;
         }
 
         .step.done {
-            color: #27ae60;
+            color: #1a5fb4;
         }
 
         .step .step-icon {
@@ -377,8 +475,8 @@
         }
 
         .step.done .step-icon {
-            background: #27ae60;
-            border-color: #27ae60;
+            background: #1a5fb4;
+            border-color: #1a5fb4;
             color: white;
         }
 
@@ -392,8 +490,9 @@
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <h1>🎓 华师新生卡</h1>
-            <p>生成你的专属开学纪念明信片</p>
+            <h1>🎓 SCNU 新生卡</h1>
+            <div class="school-en">South China Normal University</div>
+            <p>华南师范大学 · 人工智能学院 · 生成你的专属电子学生卡</p>
         </div>
 
         <!-- Form Card -->
@@ -409,8 +508,16 @@
             </div>
 
             <div class="form-group">
+                <label>性别</label>
+                <div class="gender-grid">
+                    <div class="gender-item" data-gender="male" onclick="selectGender(this)">🙋‍♂️ 男生</div>
+                    <div class="gender-item" data-gender="female" onclick="selectGender(this)">🙋‍♀️ 女生</div>
+                </div>
+            </div>
+
+            <div class="form-group">
                 <label>就读专业 <span class="required">*</span></label>
-                <input type="text" id="major" placeholder="如：计算机科学与技术" maxlength="30">
+                <input type="text" id="major" placeholder="如：人工智能、软件工程" maxlength="30">
             </div>
 
             <div class="form-group">
@@ -419,8 +526,21 @@
             </div>
 
             <div class="form-group">
-                <label>开学愿望 ✨</label>
+                <label>开学寄语 ✨</label>
                 <textarea id="wish" placeholder="写下一句你的开学愿望吧~"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>上传自拍照片（可选）</label>
+                <div class="upload-box" id="uploadBox" onclick="document.getElementById('photoInput').click()">
+                    <div class="upload-hint" id="uploadHint">
+                        <span class="icon">📷</span>
+                        点击上传自拍，生成卡通形象
+                    </div>
+                    <img class="preview" id="photoPreview" src="" alt="预览" style="display:none;">
+                    <button type="button" class="remove-btn" id="removeBtn" onclick="removePhoto(event)">×</button>
+                </div>
+                <input type="file" id="photoInput" accept="image/*" style="display:none;" onchange="handlePhotoSelect(event)">
             </div>
         </div>
 
@@ -457,7 +577,7 @@
         <!-- Generate Button -->
         <button class="btn-generate" id="btnGenerate" onclick="generate()">
             <div class="spinner"></div>
-            <span class="btn-text">✨ 生成我的明信片</span>
+            <span class="btn-text">✨ 生成我的学生卡</span>
             <span class="loading-text">正在生成中，请稍候...</span>
         </button>
 
@@ -469,7 +589,7 @@
             </div>
             <div class="step" id="step2">
                 <div class="step-icon">2</div>
-                <span>正在合成华师明信片...</span>
+                <span>正在合成 SCNU 学生卡...</span>
             </div>
             <div class="step" id="step3">
                 <div class="step-icon">3</div>
@@ -485,7 +605,7 @@
             <div class="card">
                 <div class="card-title">
                     <span class="icon">🎉</span>
-                    你的专属明信片
+                    你的专属学生卡
                 </div>
                 <div class="result-images">
                     <div class="result-item">
@@ -493,9 +613,9 @@
                         <img id="characterImg" src="" alt="卡通形象">
                     </div>
                     <div class="result-item">
-                        <div class="label">📮 华师开学明信片</div>
-                        <img id="postcardImg" src="" alt="明信片">
-                        <a class="btn-download" id="btnDownload" href="" download>📥 下载明信片</a>
+                        <div class="label">💳 SCNU 电子学生卡</div>
+                        <img id="postcardImg" src="" alt="学生卡">
+                        <a class="btn-download" id="btnDownload" href="" download>📥 下载学生卡</a>
                     </div>
                 </div>
                 <button class="btn-reset" onclick="resetForm()">🔄 再生成一张</button>
@@ -504,7 +624,7 @@
 
         <!-- Footer -->
         <div class="footer">
-            <p>华中师范大学 · 桂子山上，青春启航</p>
+            <p>华南师范大学 SCNU · 艰苦奋斗 · 严谨治学 · 求实创新 · 为人师表</p>
         </div>
     </div>
 
@@ -512,8 +632,12 @@
         // API Configuration
         const API_URL = '/api/generate';
 
-        // Style selector
+        // State
         let selectedStyle = '3d_pixar';
+        let selectedGender = '';
+        let photoFile = null;
+
+        // Style selector
         document.querySelectorAll('.style-item').forEach(item => {
             item.addEventListener('click', function() {
                 document.querySelectorAll('.style-item').forEach(i => i.classList.remove('active'));
@@ -521,6 +645,42 @@
                 selectedStyle = this.dataset.style;
             });
         });
+
+        // Gender selector
+        function selectGender(el) {
+            document.querySelectorAll('.gender-item').forEach(i => i.classList.remove('active'));
+            el.classList.add('active');
+            selectedGender = el.dataset.gender;
+        }
+
+        // Photo upload
+        function handlePhotoSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            if (file.size > 10 * 1024 * 1024) {
+                showError('图片不能超过 10MB');
+                return;
+            }
+            photoFile = file;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const preview = document.getElementById('photoPreview');
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+                document.getElementById('uploadHint').style.display = 'none';
+                document.getElementById('uploadBox').classList.add('has-image');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function removePhoto(event) {
+            event.stopPropagation();
+            photoFile = null;
+            document.getElementById('photoPreview').style.display = 'none';
+            document.getElementById('uploadHint').style.display = 'block';
+            document.getElementById('uploadBox').classList.remove('has-image');
+            document.getElementById('photoInput').value = '';
+        }
 
         // Generate
         async function generate() {
@@ -540,10 +700,13 @@
             }
 
             // Build query
-            let query = `我叫${name}，${major}专业`;
+            let query = `我叫${name}`;
+            if (selectedGender === 'male') query += `，男生`;
+            if (selectedGender === 'female') query += `，女生`;
+            query += `，${major}专业`;
             if (personality) query += `，${personality}`;
             if (wish) query += `，${wish}`;
-            query += `。请帮我生成一张开学纪念明信片，用${getStyleName(selectedStyle)}风格。`;
+            query += `。请帮我生成一张新版学生卡，用${getStyleName(selectedStyle)}风格。`;
 
             // UI state
             setLoading(true);
@@ -553,16 +716,33 @@
             setStep(1);
 
             try {
+                // If photo uploaded, first upload it
+                let photoUploaded = false;
+                let photoDataUrl = null;
+                if (photoFile) {
+                    photoUploaded = true;
+                    const formData = new FormData();
+                    formData.append('file', photoFile);
+                    const uploadResp = await fetch('/api/upload', { method: 'POST', body: formData });
+                    const uploadData = await uploadResp.json();
+                    if (!uploadData.success) {
+                        throw new Error('照片上传失败: ' + (uploadData.error || '未知错误'));
+                    }
+                    photoDataUrl = uploadData.url;
+                }
+
                 const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         query: query,
                         style: selectedStyle,
+                        gender: selectedGender,
                         name: name,
                         major: major,
                         personality: personality,
                         wish: wish,
+                        photo_url: photoDataUrl,
                         session_id: 'web_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
                     })
                 });
@@ -658,18 +838,9 @@
         function setStep(n) {
             for (let i = 1; i <= 3; i++) {
                 const el = document.getElementById('step' + i);
-                if (i < n) {
-                    el.classList.remove('active');
-                    el.classList.add('done');
-                    el.querySelector('.step-icon').textContent = '✓';
-                } else if (i === n) {
-                    el.classList.add('active');
-                    el.classList.remove('done');
-                    el.querySelector('.step-icon').textContent = i;
-                } else {
-                    el.classList.remove('active', 'done');
-                    el.querySelector('.step-icon').textContent = i;
-                }
+                el.classList.remove('active', 'done');
+                if (i < n) el.classList.add('done');
+                else if (i === n) el.classList.add('active');
             }
         }
 

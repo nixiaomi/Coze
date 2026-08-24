@@ -1,4 +1,12 @@
 {
+    "school": {
+        "name": "华南师范大学",
+        "name_en": "South China Normal University",
+        "abbr": "SCNU",
+        "college": "人工智能学院",
+        "motto": "艰苦奋斗 · 严谨治学 · 求实创新 · 为人师表",
+        "city": "广州"
+    },
     "style_presets": {
         "3d_pixar": {
             "name": "3D Pixar Style",
@@ -27,27 +35,27 @@
         }
     },
     "default_style": "3d_pixar",
-    "postcard": {
-        "width": 1080,
-        "height": 1620,
-        "background_color_start": "#1a5276",
-        "background_color_end": "#2ecc71",
-        "card_color": "#ffffff",
-        "card_margin": 60,
-        "card_radius": 30,
-        "title_font_size": 56,
-        "body_font_size": 36,
-        "wish_font_size": 32,
-        "text_color": "#2c3e50",
-        "accent_color": "#e74c3c",
-        "font_path": "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-        "header_text": "华中师范大学",
-        "sub_header_text": "Central China Normal University",
-        "footer_text": "桂子山上，青春启航"
+    "student_card": {
+        "width": 1120,
+        "height": 700,
+        "bg_color_start": "#0b2447",
+        "bg_color_end": "#19376d",
+        "accent_color": "#56b7f0",
+        "gold_color": "#d4af37",
+        "text_color": "#ffffff",
+        "sub_text_color": "#a9d5f4",
+        "logo_max_width": 640,
+        "photo_size": 300,
+        "title_font_size": 44,
+        "name_font_size": 48,
+        "body_font_size": 32,
+        "small_font_size": 24
     },
     "major_keywords": {
+        "人工智能": "surrounded by AI neural networks, robot elements, futuristic circuits, glowing data streams",
         "计算机科学": "holding a laptop, coding, digital elements, binary code floating around",
         "计算机": "holding a laptop, coding, digital elements, binary code floating around",
+        "软件工程": "coding on laptop, software interface elements, programming symbols, clean tech style",
         "数学": "surrounded by mathematical formulas, geometric shapes, pi symbol",
         "物理": "with atom models, physics equations, quantum symbols",
         "化学": "with lab equipment, molecular structures, colorful solutions",
