@@ -11,6 +11,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional
 
+VERSION = "3.0.0"
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -308,7 +310,11 @@ def _extract_image_urls(content: str) -> tuple:
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("WEB_PORT", "8080"))
-    logger.info(f"Starting web server on port {port}")
+    logger.info(f"================ 华师新生卡 Web 服务启动 ================")
+    logger.info(f"版本: {VERSION}")
+    logger.info(f"端口: {port}")
     logger.info(f"Agent API: {os.getenv('AGENT_API_URL', 'not set')}")
-    logger.info(f"Token set: {'Yes' if os.getenv('AGENT_API_TOKEN') else 'No'}")
+    token = os.getenv('AGENT_API_TOKEN', '')
+    logger.info(f"Token 配置: {'Yes (长度 %d)' % len(token) if token else 'No!!!'}")
+    logger.info(f"========================================================")
     uvicorn.run(app, host="0.0.0.0", port=port)
