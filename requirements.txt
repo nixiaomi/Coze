@@ -1,0 +1,10 @@
+# 华师新生卡 Web 服务 - Windows 精简依赖
+# 使用方法: pip install -r requirements.txt
+
+fastapi>=0.121,<1
+uvicorn>=0.38,<1
+pydantic>=2.12,<3
+requests>=2.31,<3
+Pillow>=10.3,<11
+coze-coding-dev-sdk>=0.5.19
+coze-coding-utils>=0.2.8
