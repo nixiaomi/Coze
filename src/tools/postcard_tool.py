@@ -21,7 +21,14 @@ from coze_coding_utils.runtime_ctx.context import new_context
 # ============== 路径与布局常量 ==============
 WORKSPACE = os.getenv("COZE_WORKSPACE_PATH", os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 ASSETS_DIR = os.path.join(WORKSPACE, "assets")
-BG_PATH = os.path.join(ASSETS_DIR, "scnu_card_bg.png")
+# ==== 底图配置 ====
+# 底图已上传到对象存储（365天有效），优先从 URL 下载，不依赖本地 assets 文件
+BG_PUBLIC_URL = (
+    "https://coze-coding-project.tos.coze.site/coze_storage_7677382662650134580/"
+    "scnu_card_bg_1d673199.png?sign=1819185009-f2e97e60d9-0-"
+    "deab7f88b45dcfd05e7205e58087a249a0cb0c7644d17c42f3181b8131b95b58"
+)
+BG_PATH = os.path.join(ASSETS_DIR, "scnu_card_bg.png")  # 本地 fallback
 FONT_CANDIDATES = [
     "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
@@ -222,10 +229,22 @@ def compose_postcard(image_url: str, name: str, major: str, gender: str = "", wi
         resp.raise_for_status()
         person_img = Image.open(io.BytesIO(resp.content)).convert("RGB")
 
-        # 2. 加载真实底图
-        if not os.path.exists(BG_PATH):
-            return f"错误：底图文件不存在，请检查 {BG_PATH} 是否已放置官方宣传图"
-        bg = Image.open(BG_PATH).convert("RGBA")
+        # 2. 加载真实底图：优先从公网URL下载（不依赖本地部署是否带assets）
+        bg = None
+        # 2a. 优先用公网URL下载（365天有效的签名URL）
+        try:
+            bg_resp = requests.get(BG_PUBLIC_URL, timeout=30)
+            bg_resp.raise_for_status()
+            bg = Image.open(io.BytesIO(bg_resp.content)).convert("RGBA")
+            print(f"[postcard] 底图从公网URL加载成功，大小: {len(bg_resp.content)/1024:.0f}KB")
+        except Exception as e:
+            print(f"[postcard] 公网URL加载底图失败: {e}，尝试本地文件")
+            # 2b. 降级到本地文件
+            if os.path.exists(BG_PATH):
+                bg = Image.open(BG_PATH).convert("RGBA")
+                print(f"[postcard] 使用本地底图: {BG_PATH}")
+            else:
+                return f"错误：底图加载失败，公网URL和本地文件均不可用"
         if bg.size != (1748, 1240):
             bg = bg.resize((1748, 1240), Image.Resampling.LANCZOS)
 
