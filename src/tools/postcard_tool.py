@@ -1,268 +1,296 @@
-"""学生卡合成工具 - 将生成的角色形象与华南师范大学学生卡模板合成"""
+"""
+SCNU 华南师范大学人工智能学院 - 学生卡合成工具
+基于官方宣传图底图 + 抠图人物 + 寄语排版
+"""
 import os
-import json
-import logging
+import io
+import math
 import requests
-from io import BytesIO
-from PIL import Image, ImageDraw, ImageFont
+import re
+from datetime import datetime
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from langchain.tools import tool
 from coze_coding_dev_sdk.s3 import S3SyncStorage
-from coze_coding_utils.log.write_log import request_context
-from coze_coding_utils.runtime_ctx.context import new_context
-
+import logging
 logger = logging.getLogger(__name__)
 
-# 常见中文字体候选路径（兼容 Linux 部署环境与 Windows 本地环境）
-_FONT_CANDIDATES = [
-    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-    "C:/Windows/Fonts/msyh.ttc",
-    "C:/Windows/Fonts/msyhbd.ttc",
-    "C:/Windows/Fonts/simhei.ttf",
-    "C:/Windows/Fonts/simsun.ttc",
-    "/System/Library/Fonts/PingFang.ttc",
-]
+# ============== 配置 ==============
+WORKSPACE = os.getenv("COZE_WORKSPACE_PATH", os.getcwd())
+BG_PATH = os.path.join(WORKSPACE, "assets", "scnu_card_bg.png")
+CONFIG_PATH = os.path.join(WORKSPACE, "assets", "postcard_config.json")
+
+# 底图椭圆照片区坐标（基于 1748x1240 底图精确测量）
+ELLIPSE_BOX = (200, 175, 1548, 920)  # left, top, right, bottom
+
+# 寄语区域（椭圆下方空白）
+WISH_AREA = (120, 940, 1628, 1180)
+
+CARD_SIZE = (1748, 1240)
 
 
-def _load_student_card_config():
-    """加载学生卡配置"""
-    workspace_path = os.getenv("COZE_WORKSPACE_PATH", "/workspace/projects")
-    config_path = os.path.join(workspace_path, "assets", "postcard_config.json")
-    with open(config_path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def _hex_to_rgb(hex_color: str) -> tuple:
-    """将十六进制颜色转为 RGB 三元组"""
-    hex_color = hex_color.lstrip("#")
-    return tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
-
-
-def _find_font() -> str:
-    """查找可用的中文字体路径"""
-    for path in _FONT_CANDIDATES:
-        if os.path.exists(path):
-            return path
-    return None
-
-
-def _load_font(size: int) -> ImageFont.FreeTypeFont:
-    """加载指定字号的中文字体，找不到时回退到默认字体"""
-    path = _find_font()
-    if path:
-        try:
-            return ImageFont.truetype(path, size)
-        except Exception as e:
-            logger.error(f"Font load error for {path}: {e}")
+def _find_font(preferred_names=None, size=30):
+    """查找可用中文字体"""
+    if preferred_names is None:
+        preferred_names = ["wqy-zenhei.ttc", "wqy-microhei.ttc"]
+    search_dirs = [
+        "/usr/share/fonts/truetype/wqy",
+        "/usr/share/fonts/opentype/noto",
+        "/usr/share/fonts/truetype/noto",
+        "/usr/share/fonts",
+        "C:/Windows/Fonts",
+        "/System/Library/Fonts",
+        "/Library/Fonts",
+    ]
+    for d in search_dirs:
+        if not os.path.isdir(d):
+            continue
+        for name in preferred_names:
+            p = os.path.join(d, name)
+            if os.path.exists(p):
+                return ImageFont.truetype(p, size)
+    # fallback 搜索
+    for d in search_dirs:
+        if not os.path.isdir(d):
+            continue
+        for root, _, files in os.walk(d):
+            for f in files:
+                if f.lower().endswith((".ttf", ".ttc", ".otf")) and (
+                    "wqy" in f.lower() or "noto" in f.lower() or "cjk" in f.lower()
+                    or "hei" in f.lower() or "song" in f.lower() or "yahei" in f.lower()
+                    or "simsun" in f.lower() or "simhei" in f.lower()
+                ):
+                    try:
+                        return ImageFont.truetype(os.path.join(root, f), size)
+                    except Exception:
+                        pass
     return ImageFont.load_default()
 
 
-def _create_gradient_background(width, height, color_start, color_end):
-    """创建垂直渐变背景"""
-    r1, g1, b1 = _hex_to_rgb(color_start)
-    r2, g2, b2 = _hex_to_rgb(color_end)
-    img = Image.new("RGB", (width, height))
-    draw = ImageDraw.Draw(img)
-    for y in range(height):
-        ratio = y / max(height - 1, 1)
-        r = int(r1 + (r2 - r1) * ratio)
-        g = int(g1 + (g2 - g1) * ratio)
-        b = int(b1 + (b2 - b1) * ratio)
-        draw.line([(0, y), (width, y)], fill=(r, g, b))
-    return img
+def _load_image_from_url(url: str) -> Image.Image:
+    """从 URL 下载图片"""
+    resp = requests.get(url, timeout=60)
+    resp.raise_for_status()
+    return Image.open(io.BytesIO(resp.content)).convert("RGBA")
 
 
-def _wrap_text(text: str, font, max_width: int) -> list:
-    """按字符自动换行"""
-    lines = []
-    current_line = ""
-    for char in text:
-        test_line = current_line + char
-        bbox = font.getbbox(test_line)
-        if bbox[2] - bbox[0] > max_width:
-            if current_line:
-                lines.append(current_line)
-            current_line = char
-        else:
-            current_line = test_line
-    if current_line:
-        lines.append(current_line)
-    return lines
+def _remove_white_bg(img: Image.Image, threshold: int = 240, edge_feather: int = 8) -> Image.Image:
+    """
+    去除纯色（白/近白）背景，保留人物，返回 RGBA 图。
+    适用于生图时指定 "solid white background" 后再做抠图。
+    - threshold: 像素亮度大于此值视为背景 (0-255)
+    - edge_feather: 边缘羽化像素
+    """
+    img = img.convert("RGBA")
+    w, h = img.size
+    data = img.load()
+    mask = Image.new("L", (w, h), 0)
+    md = mask.load()
+
+    for y in range(h):
+        for x in range(w):
+            px = data[x, y]
+            if isinstance(px, (int, float)):
+                # 灰度图兜底
+                r = g = b = int(px)
+                a = 255
+            else:
+                r, g, b, a = (list(px) + [255])[:4]
+            # 判断是否为白色/近白背景（R/G/B 都高且接近）
+            brightness = (r + g + b) / 3
+            is_white = brightness > threshold and abs(r - g) < 25 and abs(g - b) < 25 and abs(r - b) < 25
+            # 边缘稍微放松：浅蓝/浅灰背景也去
+            is_light = brightness > threshold + 10
+            if not (is_white or is_light):
+                # 距离白色越远，alpha 越高
+                if brightness < threshold - 20:
+                    alpha_val = 255
+                else:
+                    alpha_val = max(0, min(255, int(255 - (brightness - (threshold-20))*3)))
+                md[x, y] = alpha_val
+            else:
+                md[x, y] = 0
+
+    # 羽化边缘
+    if edge_feather > 0:
+        mask = mask.filter(ImageFilter.GaussianBlur(radius=edge_feather/2))
+
+    # 把 mask 贴到 alpha 通道
+    result = img.copy()
+    result.putalpha(mask)
+    return result
 
 
-def _paste_logo(bg, logo_path: str, max_width: int):
-    """将学院 logo 贴到背景顶部，返回 logo 底部 y 坐标"""
-    if not logo_path or not os.path.exists(logo_path):
-        return 40
-    try:
-        logo = Image.open(logo_path).convert("RGBA")
-        # 缩放到指定最大宽度
-        if logo.width > max_width:
-            new_h = int(logo.height * max_width / logo.width)
-            logo = logo.resize((max_width, new_h), Image.Resampling.LANCZOS)
-        x = (bg.width - logo.width) // 2
-        y = 36
-        bg.paste(logo, (x, y), logo)
-        return y + logo.height
-    except Exception as e:
-        logger.error(f"Logo paste error: {e}")
-        return 40
+def _fit_person_into_ellipse(person_img: Image.Image) -> Image.Image:
+    """
+    将抠好的人物图放入椭圆照片区，自动缩放适配，
+    人物贴底部（类似证件照站位），超出椭圆部分裁掉。
+    返回贴到全画布 RGBA 的图层。
+    """
+    el, et, er, eb = ELLIPSE_BOX
+    ew, eh = er - el, eb - et
+    canvas = Image.new("RGBA", CARD_SIZE, (0,0,0,0))
+
+    pw, ph = person_img.size
+    # 目标：人物宽度占椭圆宽度的 65-80%（避免撑满椭圆），高度自适应
+    target_w = int(ew * 0.72)
+    scale = target_w / pw
+    target_h = int(ph * scale)
+    # 如果人物高度超过椭圆高度的 90%，以高度为准缩放
+    if target_h > eh * 0.92:
+        scale = (eh * 0.92) / ph
+        target_w = int(pw * scale)
+        target_h = int(ph * scale)
+
+    person_resized = person_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+
+    # 居中偏右放置（和底图里建筑花树在右的视觉平衡），贴底部
+    x = el + int((ew - target_w) * 0.55)  # 稍微偏右
+    y = eb - target_h - int(eh * 0.04)   # 距离椭圆底边留 4% 空间
+
+    # 用椭圆做蒙版，超出椭圆部分裁掉
+    ellipse_mask = Image.new("L", CARD_SIZE, 0)
+    emd = ImageDraw.Draw(ellipse_mask)
+    emd.ellipse(ELLIPSE_BOX, fill=255)
+
+    canvas.paste(person_resized, (x, y), person_resized)
+    # 应用椭圆蒙版
+    alpha = canvas.split()[-1]
+    alpha = Image.composite(alpha, Image.new("L", CARD_SIZE, 0), ellipse_mask)
+    canvas.putalpha(alpha)
+    return canvas
 
 
-def _paste_circular_photo(bg, photo, center_x, center_y, size):
-    """将角色照片以圆形（带白边）方式贴到背景"""
-    photo = photo.convert("RGB").resize((size, size), Image.Resampling.LANCZOS)
-    mask = Image.new("L", (size, size), 0)
-    mask_draw = ImageDraw.Draw(mask)
-    mask_draw.ellipse((0, 0, size, size), fill=255)
-    top_left = (center_x - size // 2, center_y - size // 2)
-    bg.paste(photo, top_left, mask)
-    # 白色描边圆环
-    ring = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    ring_draw = ImageDraw.Draw(ring)
-    ring_draw.ellipse((3, 3, size - 3, size - 3), outline=(255, 255, 255, 220), width=6)
-    bg.paste(ring, top_left, ring)
+def _draw_wish(base: Image.Image, wish: str, name: str):
+    """在椭圆下方空白处绘制寄语 + 署名，竖排居中，带半透明底衬。"""
+    draw = ImageDraw.Draw(base)
+    wl, wt, wr, wb = WISH_AREA
+    ww, wh = wr - wl, wb - wt
 
+    # 字体大小自适应
+    font_size = 44
+    if len(wish) > 30:
+        font_size = 38
+    if len(wish) > 45:
+        font_size = 34
 
-def _compose_student_card(character_img, name, major, gender, wish, config) -> Image.Image:
-    """合成学生卡"""
-    school = config["school"]
-    sc = config["student_card"]
-    width = sc["width"]
-    height = sc["height"]
+    font_wish = _find_font(size=font_size)
+    font_sign = _find_font(size=int(font_size * 0.75))
 
-    # 深蓝渐变背景
-    bg = _create_gradient_background(width, height, sc["bg_color_start"], sc["bg_color_end"])
-    draw = ImageDraw.Draw(bg)
+    # 寄语内容加引号
+    wish_text = f"\u201c{wish}\u201d"
+    sign_text = f"\u2014\u2014{name}"
 
-    accent = _hex_to_rgb(sc["accent_color"])
-    gold = _hex_to_rgb(sc["gold_color"])
-    white = _hex_to_rgb(sc["text_color"])
-    sub = _hex_to_rgb(sc["sub_text_color"])
+    # 计算文字宽度，自动折行（寄语最多两行）
+    def wrap_text(text, font, max_w):
+        lines = []
+        line = ""
+        for ch in text:
+            if draw.textlength(line + ch, font=font) <= max_w:
+                line += ch
+            else:
+                lines.append(line)
+                line = ch
+        if line:
+            lines.append(line)
+        return lines
 
-    # 金色描边外框
-    draw.rounded_rectangle((12, 12, width - 12, height - 12), radius=24,
-                           outline=gold, width=3)
+    lines = wrap_text(wish_text, font_wish, ww - 80)
+    if len(lines) > 2:
+        # 超过两行就再缩小
+        font_size = int(font_size * 0.85)
+        font_wish = _find_font(size=font_size)
+        font_sign = _find_font(size=int(font_size * 0.75))
+        lines = wrap_text(wish_text, font_wish, ww - 80)
+    lines = lines[:2]
 
-    # 顶部学院 logo
-    workspace_path = os.getenv("COZE_WORKSPACE_PATH", "/workspace/projects")
-    logo_path = os.path.join(workspace_path, "assets", "school_logo.png")
-    logo_bottom = _paste_logo(bg, logo_path, sc["logo_max_width"])
+    # 半透明浅色圆角底衬（让文字在蓝底上更清晰）
+    line_h = font_size + 18
+    total_h = line_h * len(lines) + int(font_size * 0.75) + 30
+    pad = 30
+    rect_y0 = wt + (wh - total_h)//2 - pad
+    rect_y1 = rect_y0 + total_h + pad*2
+    rect_x0 = wl + 60
+    rect_x1 = wr - 60
+    overlay = Image.new("RGBA", CARD_SIZE, (0,0,0,0))
+    od = ImageDraw.Draw(overlay)
+    od.rounded_rectangle([rect_x0, rect_y0, rect_x1, rect_y1], radius=24,
+                         fill=(255,255,255,90))
+    base.alpha_composite(overlay)
+    draw = ImageDraw.Draw(base)
 
-    # 英文校名
-    en_font = _load_font(22)
-    en_text = school["name_en"]
-    en_bbox = en_font.getbbox(en_text)
-    en_w = en_bbox[2] - en_bbox[0]
-    draw.text(((width - en_w) // 2, logo_bottom + 10), en_text, fill=sub, font=en_font)
+    # 居中绘制文字
+    cur_y = rect_y0 + pad
+    text_color = (20, 55, 100, 240)
+    for line in lines:
+        tw = draw.textlength(line, font=font_wish)
+        tx = wl + (ww - tw) // 2
+        # 轻微阴影增加可读性
+        draw.text((tx+1, cur_y+1), line, fill=(255,255,255,120), font=font_wish)
+        draw.text((tx, cur_y), line, fill=text_color, font=font_wish)
+        cur_y += line_h
 
-    # 分隔装饰线
-    line_y = logo_bottom + 52
-    line_margin = 80
-    draw.line([(line_margin, line_y), (width // 2 - 60, line_y)], fill=gold, width=2)
-    draw.ellipse((width // 2 - 8, line_y - 8, width // 2 + 8, line_y + 8), fill=gold)
-    draw.line([(width // 2 + 60, line_y), (width - line_margin, line_y)], fill=gold, width=2)
-
-    # 左侧圆形照片
-    photo_size = sc["photo_size"]
-    photo_center_x = 250
-    photo_center_y = (line_y + height) // 2
-    _paste_circular_photo(bg, character_img, photo_center_x, photo_center_y, photo_size)
-
-    # 右侧信息区
-    info_x = 460
-    info_right = width - 60
-
-    name_font = _load_font(sc["name_font_size"])
-    body_font = _load_font(sc["body_font_size"])
-    small_font = _load_font(sc["small_font_size"])
-
-    # 姓名
-    y = line_y + 46
-    if name:
-        draw.text((info_x, y), name, fill=white, font=name_font)
-        y += name_font.getbbox(name)[3] - name_font.getbbox(name)[1] + 24
-
-    # 专业
-    if major:
-        draw.text((info_x, y), "专业", fill=gold, font=small_font)
-        y += 30
-        draw.text((info_x, y), major, fill=white, font=body_font)
-        y += body_font.getbbox(major)[3] - body_font.getbbox(major)[1] + 26
-
-    # 学院 + 性别
-    college = school["college"]
-    gender_text = {"male": "男", "female": "女"}.get(gender, "")
-    tag = f"{college}" + (f"  ·  {gender_text}" if gender_text else "")
-    draw.text((info_x, y), tag, fill=sub, font=small_font)
-    y += small_font.getbbox(tag)[3] - small_font.getbbox(tag)[1] + 30
-
-    # 寄语
-    if wish:
-        draw.text((info_x, y), "开学寄语", fill=gold, font=small_font)
-        y += 34
-        wish_lines = _wrap_text(wish, body_font, info_right - info_x)
-        for line in wish_lines[:3]:
-            draw.text((info_x, y), line, fill=white, font=body_font)
-            y += body_font.getbbox(line)[3] - body_font.getbbox(line)[1] + 14
-
-    # 底部校训
-    motto_font = _load_font(22)
-    motto = school["motto"]
-    motto_bbox = motto_font.getbbox(motto)
-    motto_w = motto_bbox[2] - motto_bbox[0]
-    draw.text(((width - motto_w) // 2, height - 52), motto, fill=sub, font=motto_font)
-
-    return bg
+    # 署名右对齐
+    sw = draw.textlength(sign_text, font=font_sign)
+    sx = rect_x1 - pad - sw
+    sy = cur_y + 6
+    draw.text((sx+1, sy+1), sign_text, fill=(255,255,255,100), font=font_sign)
+    draw.text((sx, sy), sign_text, fill=(40, 80, 140, 230), font=font_sign)
 
 
 @tool
-def compose_postcard(image_url: str, name: str, major: str, gender: str, wish: str) -> str:
-    """将生成的角色形象与华南师范大学学生卡模板合成，输出高清学生卡图片。
+def compose_postcard(image_url: str, name: str, major: str,
+                     gender: str = "", wish: str = "", style: str = "") -> str:
+    """
+    将生成的卡通人物图抠去白底，贴入华南师大蓝白渐变宣传底图的椭圆区域，
+    并在下方空白处写入寄语「"寄语内容"——姓名」。
 
     Args:
-        image_url: 已生成的角色形象图片 URL
-        name: 学生姓名或昵称
-        major: 专业名称，如"软件工程"
-        gender: 性别，可选值 "male" / "female" / ""（空字符串表示未知）
-        wish: 开学寄语，如"希望付出总有回报"
+        image_url: 卡通人物图 URL（应为纯色白底，便于抠图）
+        name: 学生姓名/昵称
+        major: 学生专业（保留字段，当前底图已有学院信息，预留扩展用）
+        gender: "male"/"female"/"" （保留字段）
+        wish: 开学寄语（将在图片下方空白处以引号+署名格式展示）
+        style: 画风（保留字段，不影响合成）
 
     Returns:
-        合成的学生卡图片下载 URL
+        合成后的学生卡下载 URL
     """
-    ctx = request_context.get() or new_context(method="compose_postcard")
-
     try:
-        # 下载角色图片
-        logger.info(f"Downloading character image from: {image_url[:80]}...")
-        resp = requests.get(image_url, timeout=60)
-        resp.raise_for_status()
-        character_img = Image.open(BytesIO(resp.content)).convert("RGB")
+        if not os.path.exists(BG_PATH):
+            return "学生卡底图缺失，请联系管理员。"
 
-        # 加载配置并合成学生卡
-        config = _load_student_card_config()
-        card = _compose_student_card(character_img, name, major, gender, wish, config)
+        # 1. 加载底图
+        bg = Image.open(BG_PATH).convert("RGBA")
 
-        # 保存到临时文件
-        os.makedirs("/tmp", exist_ok=True)
-        local_path = f"/tmp/scnu_card_{os.getpid()}.png"
-        card.save(local_path, "PNG")
-        logger.info(f"Student card saved locally: {local_path}")
+        # 2. 加载人物图并抠白底
+        person = _load_image_from_url(image_url)
+        person_nobg = _remove_white_bg(person, threshold=235, edge_feather=6)
 
-        # 上传到对象存储
+        # 3. 把人物贴入椭圆区域
+        person_layer = _fit_person_into_ellipse(person_nobg)
+        bg.alpha_composite(person_layer)
+
+        # 4. 写寄语（椭圆下方空白）
+        if wish:
+            _draw_wish(bg, wish, name)
+
+        # 5. 保存并上传
+        out_path = f"/tmp/scnu_student_card_{name}_{int(datetime.now().timestamp())}.png"
+        bg.convert("RGB").save(out_path, "PNG")
+
         storage = S3SyncStorage()
-        with open(local_path, "rb") as f:
+        with open(out_path, "rb") as f:
             key = storage.upload_file(
                 file_content=f.read(),
-                file_name="scnu_student_card.png",
-                content_type="image/png",
+                file_name=os.path.basename(out_path),
+                content_type="image/png"
             )
-        file_path = storage.generate_presigned_url(key=key)
-        logger.info(f"Student card uploaded: {file_path}")
+        url = storage.generate_presigned_url(key=key)
 
-        return f"学生卡合成成功！下载链接: {file_path}"
+        logger.info(f"学生卡合成成功: name={name}, url={url[:60]}...")
+        return f"学生卡合成成功！下载链接: {url}"
 
     except Exception as e:
-        logger.error(f"compose_postcard error: {e}", exc_info=True)
+        import traceback
+        logger.error(f"学生卡合成失败: {e}\n{traceback.format_exc()}")
         return f"学生卡合成失败: {str(e)}"

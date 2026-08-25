@@ -45,8 +45,9 @@ def generate_character_image(prompt: str, style: str = "3d_pixar") -> str:
     except Exception as e:
         logger.error(f"Failed to load postcard config: {e}")
 
-    # 组装完整prompt
-    full_prompt = f"{prompt}, {style_suffix}" if style_suffix else prompt
+    # 组装完整prompt —— 强制要求纯白背景，方便后续抠图贴入学生卡
+    bg_instruction = "solid pure white clean background, studio portrait lighting, centered subject, half body or bust shot, no shadows on background, no background elements"
+    full_prompt = f"{prompt}, {bg_instruction}, {style_suffix}" if style_suffix else f"{prompt}, {bg_instruction}"
     logger.info(f"Final image generation prompt: {full_prompt}")
 
     try:
@@ -99,7 +100,8 @@ def generate_from_selfie(image_url: str, prompt: str) -> str:
     except Exception as e:
         logger.error(f"Failed to load postcard config: {e}")
 
-    full_prompt = f"{prompt}, {style_suffix}" if style_suffix else prompt
+    bg_instruction = "solid pure white clean background, studio portrait lighting, centered subject, half body or bust shot, no shadows on background"
+    full_prompt = f"{prompt}, {bg_instruction}, {style_suffix}" if style_suffix else f"{prompt}, {bg_instruction}"
     logger.info(f"Selfie-to-image prompt: {full_prompt}")
 
     try:
