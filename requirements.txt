@@ -4,6 +4,7 @@
 fastapi>=0.121,<1
 uvicorn>=0.38,<1
 pydantic>=2.12,<3
+python-multipart>=0.0.9
 requests>=2.31,<3
 Pillow>=10.3,<11
 coze-coding-dev-sdk>=0.5.19
