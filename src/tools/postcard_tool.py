@@ -44,7 +44,7 @@ ERX = (ELLIPSE_BOX[2] - ELLIPSE_BOX[0]) // 2  # 787
 ERY = (ELLIPSE_BOX[3] - ELLIPSE_BOX[1]) // 2  # 481
 
 # 人物放置位置：椭圆中心偏右下（遮住右侧建筑和树干，保留左侧异木棉花枝）
-PERSON_CENTER_X_RATIO = 0.58  # 椭圆中心往右一点（偏右）
+PERSON_CENTER_X_RATIO = 0.62  # 椭圆中心往右偏移（中间偏右）
 PERSON_BOTTOM_PADDING = 6     # 人物脚离椭圆底部的距离
 PERSON_WIDTH_RATIO = 0.52     # 人物宽度占椭圆宽度的比例
 
@@ -118,9 +118,8 @@ def _fit_person_into_ellipse(person: Image.Image) -> Image.Image:
         new_w, new_h = int(new_w * scale), max_h
         person = person.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
-    # 位置：水平偏右，底部贴椭圆底
-    center_x = int(ELLIPSE_BOX[0] + ERX + (ERX * 2 * (PERSON_CENTER_X_RATIO - 0.5)))
-    pos_x = center_x - new_w // 2
+    # 位置：右对齐（人物右边缘在椭圆约78%处），底部贴椭圆底
+    pos_x = ELLIPSE_BOX[0] + int(ERX * 2 * 0.78) - new_w
     pos_y = ELLIPSE_BOX[3] - PERSON_BOTTOM_PADDING - new_h
 
     # 用椭圆蒙版裁切超出椭圆的部分（人物不要超出椭圆蓝框）
